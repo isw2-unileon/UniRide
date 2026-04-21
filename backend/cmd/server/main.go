@@ -51,6 +51,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Crear usuario de prueba "admin"
+	testPasswordHash, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	if err != nil {
+		logger.Error("failed to hash test user password", "error", err)
+	} else {
+		_, err = db.ExecContext(ctx, `
+			INSERT INTO users (username, email, password_hash)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash
+		`, "admin", "admin@uni.es", string(testPasswordHash))
+		if err != nil {
+			logger.Error("failed to insert test user", "error", err)
+		} else {
+			logger.Info("test user 'admin' ensured")
+		}
+	}
+
 	gin.SetMode(cfg.GinMode)
 
 	r := gin.New()
