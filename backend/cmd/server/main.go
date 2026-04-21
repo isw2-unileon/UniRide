@@ -3,23 +3,53 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
+	"net/mail"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/isw2-unileon/proyect-scaffolding/backend/internal/config"
+	"github.com/jackc/pgx/v5/pgconn"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+type registerRequest struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type loginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
 
 func main() {
 	ctx := context.Background()
 
 	cfg := config.Load()
+
+	db, err := sql.Open("pgx", cfg.DatabaseDSN())
+	if err != nil {
+		logger.Error("database open error", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	if err := db.PingContext(ctx); err != nil {
+		logger.Error("database ping error", "error", err)
+		os.Exit(1)
+	}
 
 	gin.SetMode(cfg.GinMode)
 
@@ -33,6 +63,140 @@ func main() {
 	api := r.Group("/api")
 	api.GET("/hello", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "Hello from the API"})
+	})
+	api.POST("/login", func(c *gin.Context) {
+		var req loginRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON body"})
+			return
+		}
+
+		req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+
+		if req.Email == "" || req.Password == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "email and password are required"})
+			return
+		}
+
+		if _, err := mail.ParseAddress(req.Email); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid email format"})
+			return
+		}
+
+		queryCtx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		defer cancel()
+
+		var userID int64
+		var username string
+		var storedHash string
+		err := db.QueryRowContext(
+			queryCtx,
+			`SELECT id, username, password_hash
+			 FROM users
+			 WHERE email = $1`,
+			req.Email,
+		).Scan(&userID, &username, &storedHash)
+
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+				return
+			}
+
+			logger.Error("database select user error", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to login"})
+			return
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(req.Password)); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Login exitoso",
+			"user": gin.H{
+				"id":       userID,
+				"username": username,
+				"email":    req.Email,
+			},
+		})
+	})
+	api.POST("/register", func(c *gin.Context) {
+		var req registerRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON body"})
+			return
+		}
+
+		req.Username = strings.TrimSpace(req.Username)
+		req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+
+		if req.Username == "" || req.Email == "" || req.Password == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "username, email and password are required"})
+			return
+		}
+
+		if _, err := mail.ParseAddress(req.Email); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid email format"})
+			return
+		}
+
+		if len(req.Password) < 8 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "password must have at least 8 characters"})
+			return
+		}
+
+		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			logger.Error("password hash error", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process password"})
+			return
+		}
+
+		queryCtx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		defer cancel()
+
+		var userID int64
+		var createdAt time.Time
+		err = db.QueryRowContext(
+			queryCtx,
+			`INSERT INTO users (username, email, password_hash)
+			 VALUES ($1, $2, $3)
+			 RETURNING id, created_at`,
+			req.Username,
+			req.Email,
+			string(passwordHash),
+		).Scan(&userID, &createdAt)
+
+		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				switch pgErr.ConstraintName {
+				case "users_username_key":
+					c.JSON(http.StatusConflict, gin.H{"error": "username already exists"})
+				case "users_email_key":
+					c.JSON(http.StatusConflict, gin.H{"error": "email already exists"})
+				default:
+					c.JSON(http.StatusConflict, gin.H{"error": "user already exists"})
+				}
+				return
+			}
+
+			logger.Error("database insert user error", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+			return
+		}
+
+		c.JSON(http.StatusCreated, gin.H{
+			"message": "user registered successfully",
+			"user": gin.H{
+				"id":         userID,
+				"username":   req.Username,
+				"email":      req.Email,
+				"created_at": createdAt,
+			},
+		})
 	})
 
 	srv := &http.Server{
