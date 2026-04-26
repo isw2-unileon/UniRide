@@ -82,45 +82,58 @@ export default function Login() {
   };
 
   return (
-    <main className="login-page">
-      <form className="login-card" onSubmit={handleSubmit}>
-        <h1>{mode === "login" ? "Iniciar sesión" : "Crear cuenta"}</h1>
+    <main className="auth-page">
+      <form className="card auth-card auth-form" onSubmit={handleSubmit}>
+        <h1 className="text-title">{mode === "login" ? "Iniciar sesión" : "Crear cuenta"}</h1>
 
         {mode === "register" && (
-          <>
-            <label htmlFor="username">Nombre de usuario</label>
+          <div className="field">
+            <label className="text-label" htmlFor="username">
+              Nombre de usuario
+            </label>
             <input
+              className="input"
               id="username"
               type="text"
               placeholder="tu_usuario"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
             />
-          </>
+          </div>
         )}
 
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          placeholder="tuemail@uni.es"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        <div className="field">
+          <label className="text-label" htmlFor="email">
+            Email
+          </label>
+          <input
+            className="input"
+            id="email"
+            type="email"
+            placeholder="tuemail@uni.es"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
 
-        <label htmlFor="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          placeholder="••••••••"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        <div className="field">
+          <label className="text-label" htmlFor="password">
+            Password
+          </label>
+          <input
+            className="input"
+            id="password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
 
-        {error && <p className="msg error">{error}</p>}
-        {ok && <p className="msg ok">{ok}</p>}
+        {error && <p className="message message-error">{error}</p>}
+        {ok && <p className="message message-success">{ok}</p>}
 
-        <button type="submit" disabled={loading}>
+        <button className="btn btn-primary auth-submit" type="submit" disabled={loading}>
           {loading
             ? mode === "login"
               ? "Entrando..."
@@ -132,7 +145,7 @@ export default function Login() {
 
         <p className="switch-auth">
           {mode === "login" ? "No tienes una cuenta?" : "Ya tienes una cuenta?"}
-          <button type="button" className="switch-auth-btn" onClick={switchMode}>
+          <button type="button" className="btn btn-ghost switch-auth-btn" onClick={switchMode}>
             {mode === "login" ? "Crear una" : "Iniciar sesión"}
           </button>
         </p>
