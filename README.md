@@ -1,109 +1,258 @@
-# UniRide – University Shared Mobility Platform
+# UniRide
 
-## 1. Project Overview
+UniRide is a university-only ride-sharing platform for short campus commutes. It helps students publish one-time trips, request seats, and coordinate transportation with transparent cost sharing.
 
-UniRide is a university-focused ride-sharing web platform designed to facilitate short-distance trips to and from campus.
+## Project Purpose
 
-The platform connects students from the same university who wish to share specific rides on specific dates and times, allowing them to coordinate transportation and split costs in a simple and structured way.
+This repository contains the full UniRide monorepo used for course development and evaluation:
 
-Each ride is treated as an independent trip instance. Users do not subscribe to drivers or book recurring services; instead, they request seats for individual trips.
+- Backend API in Go (Gin)
+- Frontend web app in React + TypeScript (Vite)
+- PostgreSQL database (Docker Compose)
+- End-to-end tests with Playwright
 
-UniRide is not a general ride-hailing platform, but a closed, academic-community-based mobility solution.
+The goal is to let any developer or teacher run the platform locally with a predictable setup.
 
----
+## Tech Stack
 
-## 2. Problem Statement
+- Backend: Go, Gin, PostgreSQL driver (pgx)
+- Frontend: React, TypeScript, Vite, Vitest, ESLint
+- Database: PostgreSQL 16 (Docker)
+- E2E testing: Playwright
+- Tooling: Makefile, Docker Compose
 
-Many university students commute daily using private vehicles with low occupancy rates. This leads to:
+## Prerequisites
 
-- Increased transportation costs  
-- Traffic congestion near campus  
-- Higher environmental impact  
-- Lack of coordination among students living nearby  
+Install the following before starting:
 
-Existing solutions are either:
+1. Go 1.22+ (or compatible with go.mod)
+2. Node.js 20+ and npm 10+
+3. Docker Desktop (with Docker Compose)
+4. GNU Make (recommended for one-command workflows)
 
-- General ride-hailing platforms
-- Long-distance carpooling services
-- Informal messaging groups with poor organization
+If you do not have `make` on Windows, use the manual commands in the sections below.
 
-There is currently no structured, university-specific system focused on organizing individual short-distance academic trips within a closed community.
+## Installation
 
----
+From the repository root.
 
-## 3. Proposed Solution
+macOS/Linux:
 
-UniRide provides:
+```bash
+go mod download
+cd frontend && npm ci
+cd ../e2e && npm ci
+cd ..
+```
 
-- A closed university-based community  
-- Structured publication of specific trips (date, time, origin, destination, seats available)  
-- Seat request and approval workflow for each trip  
-- Transparent cost-sharing model (non-profit)  
-- Trip history and accountability  
+Windows (PowerShell):
 
-Each trip is independent and must be explicitly created by a driver. Passengers request seats for that specific trip only. There is no subscription model, automatic recurring booking, or long-term driver-passenger binding.
+```powershell
+go mod download
+Set-Location frontend
+npm ci
+Set-Location ..\e2e
+npm ci
+Set-Location ..
+```
 
-The system prioritizes simplicity, transparency, and structured coordination rather than on-demand ride services.
+Optional (for hot reload and lint tooling used by Makefile):
 
----
+```bash
+go install github.com/air-verse/air@latest
+```
 
-## 4. Differentiation
+## Environment Variables (.env)
 
-UniRide differs from large-scale ride-sharing platforms in the following ways:
+This project expects a root `.env` file for PostgreSQL. If you dont have the file, ask a colaborator for the values.
 
-| Aspect | General Platforms | UniRide |
-|--------|-------------------|----------|
-| Scope | Public, city-wide | University-only |
-| Distance | Any distance | Short academic commutes |
-| Business Model | Profit-based | Cost-sharing only |
-| Community | Open users | Closed university group |
-| Trip Model | On-demand / continuous service | Independent trip instances |
-| Driver-Passenger Relation | Platform-mediated service | Peer-based, trip-by-trip agreement |
+Backend defaults are defined in `backend/internal/config/config.go`, so the API can also read equivalent DB values from `DB_*` variables if needed.
 
-UniRide focuses on structured coordination within a defined academic ecosystem rather than open-market ride services.
+## Run Locally
 
----
+Open separate terminals from the repository root.
 
-## 5. Core Functionalities (MVP)
+### 1) Start PostgreSQL
 
-The initial version of the platform will include:
+```bash
+docker compose up -d
+```
 
-- User registration and authentication  
-- Profile creation  
-- Trip creation (origin, destination, date, time, available seats)  
-- Trip search and filtering  
-- Seat request workflow (request → approve/reject per trip)  
-- Trip participation tracking  
-- Route optimization algorithms  
-- Real-time GPS tracking  
-- Basic user rating system  
+### 2) Run Backend API
 
-### Out of Scope
+With Make (hot reload, macOS/Linux):
 
-To keep the project feasible within the course timeline, the following features are excluded:
+```bash
+make run-backend
+```
 
-- Integrated payment systems  
-- Automatic recurring bookings  
-- Mobile native applications  
+With Make (hot reload, Windows):
 
----
+```powershell
+make run-backend
+```
 
-## 6. Target Users
+Without Make:
 
-- University students  
-- Students who wish to share specific scheduled trips  
+```bash
+go run ./backend/cmd/server
+```
 
----
+Backend default URL: `http://localhost:8080`
 
-## 7. Technical Scope
+Health check: `http://localhost:8080/health`
 
-The system will be implemented as:
+### 3) Run Frontend
 
-- A web-based application  
-- Client–server architecture  
-- RESTful backend  
-- Relational database  
-- Role-based access control  
+With Make (macOS/Linux):
 
-Each trip will be modeled as a distinct entity with its own lifecycle (created → requested → approved/rejected → completed).
+```bash
+make run-frontend
+```
+
+With Make (Windows):
+
+```powershell
+make run-frontend
+```
+
+Without Make (macOS/Linux):
+
+```bash
+cd frontend
+npm run dev
+```
+
+Without Make (Windows PowerShell):
+
+```powershell
+Set-Location frontend
+npm run dev
+```
+
+Frontend default URL: `http://localhost:5173`
+
+## Build Commands
+
+From repository root (macOS/Linux):
+
+```bash
+make build-backend
+make build-frontend
+```
+
+From repository root (Windows PowerShell):
+
+```powershell
+make build-backend
+make build-frontend
+```
+
+Manual alternative (macOS/Linux):
+
+```bash
+go build -o backend/bin/server ./backend/cmd/server
+cd frontend && npm run build
+```
+
+Manual alternative (Windows PowerShell):
+
+```powershell
+go build -o backend/bin/server ./backend/cmd/server
+Set-Location frontend
+npm run build
+```
+
+## Test Commands
+
+### Backend + Frontend unit/integration tests
+
+With Make (macOS/Linux):
+
+```bash
+make test
+```
+
+With Make (Windows PowerShell):
+
+```powershell
+make test
+```
+
+Manual alternative (macOS/Linux):
+
+```bash
+go test -v -race ./...
+cd frontend && npm run test
+```
+
+Manual alternative (Windows PowerShell):
+
+```powershell
+go test -v -race ./...
+Set-Location frontend
+npm run test
+```
+
+### E2E tests (requires backend and frontend running)
+
+With Make (macOS/Linux):
+
+```bash
+make e2e
+```
+
+With Make (Windows PowerShell):
+
+```powershell
+make e2e
+```
+
+Manual alternative (macOS/Linux):
+
+```bash
+cd e2e && npx playwright test
+```
+
+Manual alternative (Windows PowerShell):
+
+```powershell
+Set-Location e2e
+npx playwright test
+```
+
+## Contribution Rules
+
+1. Create a dedicated branch for each change.
+2. Keep commits focused and write clear commit messages.
+3. Before opening a PR, run:
+
+```bash
+make test
+make lint
+```
+
+Windows PowerShell alternative:
+
+```powershell
+make test
+make lint
+```
+
+4. Include a concise PR description with:
+- What changed
+- Why it changed
+- How it was tested
+5. Request review from teammates before merging.
+6. Do not merge if CI is failing.
+
+## Quick Verification Checklist
+
+Use this checklist to confirm local setup is complete:
+
+1. `docker compose up -d` starts PostgreSQL successfully.
+2. `go run ./backend/cmd/server` serves `/health` at port 8080.
+3. `npm run dev` in `frontend/` serves the app at port 5173.
+4. `go test -v -race ./...` and `npm run test` pass.
+5. `npx playwright test` runs when backend and frontend are up.
 
